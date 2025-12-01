@@ -39,6 +39,8 @@ RL_Gridworld/
 ├── main.py                  # Script principal (Value Iteration + V-Learning)
 ├── main_qlearning.py        # Comparaison des 3 algorithmes
 ├── dynamic_goal_experiment.py  # Expérience avec goal dynamique
+├── moving_goal_experiment.py   # Catch game (features basiques)
+├── catch_game_improved.py      # Catch game (features enrichies) ⭐
 │
 ├── requirements.txt         # Dépendances Python
 └── README.md               # Documentation (ce fichier)
@@ -398,6 +400,27 @@ python dynamic_goal_experiment.py
 - Épisodes 1000-1499 : Goal à (4,0)
 - Épisodes 1500-1999 : Goal à (2,3)
 
+#### Script 4 : Catch Game (Goal Mobile) ⭐ **NOUVEAU**
+```powershell
+python catch_game_improved.py
+```
+
+**Ce script démontre :**
+- Q-Learning avec **features enrichies** (agent_pos, goal_pos)
+- Goal qui se **téléporte** à chaque capture
+- 1000 épisodes d'entraînement
+- Objectif : Maximiser le nombre de catches en 100 pas
+
+**Performance attendue :**
+- ~21 catches par épisode (sur 100 pas)
+- Amélioration ×10 par rapport aux features basiques
+- Démonstration finale avec ~30+ catches
+
+**Visualisations générées :**
+- Courbes d'apprentissage (récompenses et catches)
+- Animation de l'agent poursuivant le goal mobile
+- Statistiques détaillées
+
 ---
 
 ## 📊 Résultats et comparaisons
@@ -461,20 +484,113 @@ python dynamic_goal_experiment.py
 
 **Graphique :** Les lignes vertes montrent les changements de goal et les perturbations associées.
 
-### 2. Feature Engineering
+### 2. Catch Game : Goal Mobile avec Téléportation
 
-**Problème actuel :**
+**Fichier :** `catch_game_improved.py`
+
+#### Concept
+
+Dans cette expérience avancée, le **goal se téléporte** à une position aléatoire chaque fois que l'agent l'atteint. L'agent doit continuellement **poursuivre** le goal qui se déplace au sein d'un même épisode.
+
+**Objectif :** Maximiser le nombre de "catches" (captures du goal) en 100 pas.
+
+#### Problème avec Features Basiques
+
+**Version initiale (`moving_goal_experiment.py`) :**
+- État = Position de l'agent uniquement
+- Q(position, action) ou V(position)
+- **Résultat :** Performance très faible (~1.24-1.94 catches/100 steps)
+
+**Pourquoi ça échoue ?**
+- L'agent apprend "quelle action faire à telle position"
+- Mais il ne sait **pas où est le goal** !
+- Quand le goal se téléporte, l'agent ne peut pas le "voir"
+- Impossible de généraliser la stratégie de poursuite
+
+#### Solution : Feature Engineering
+
+**Version améliorée (`catch_game_improved.py`) :**
+- État = **(Position agent, Position goal)** → Tuple complet
+- Q((agent_pos, goal_pos), action)
+- L'agent apprend : "Comment aller de n'importe quelle position A vers n'importe quelle position B"
+
+**Implémentation :**
+```python
+class CatchGameEnv:
+    def _get_state(self):
+        return (self.agent_pos, self.goal_pos)  # État enrichi
+
+class ImprovedQLearningAgent:
+    def __init__(self):
+        # defaultdict pour gérer les états tuple dynamiquement
+        self.q_table = defaultdict(lambda: np.zeros(4))
+```
+
+#### Résultats Comparés
+
+| Méthode | État | Catches/100 steps | Performance |
+|---------|------|-------------------|-------------|
+| **Features basiques** | position | 1.24-1.94 | ❌ Très faible |
+| **Features enrichies** | (agent_pos, goal_pos) | **21.43** | ✅ Excellent (×10) |
+
+**Épisode de démonstration (après entraînement) :**
+- 32 catches en 100 steps
+- Score : 3132
+- 506 états uniques appris
+
+#### Leçons Apprises
+
+**1. Importance du Feature Engineering**
+- L'agent ne peut apprendre que ce qu'il **observe**
+- Sans connaître la position du goal, impossible de le poursuivre efficacement
+- L'état doit contenir **toute l'information nécessaire** pour la tâche
+
+**2. Généralisation**
+- Avec features enrichies, l'agent apprend une **stratégie générale** de poursuite
+- Il peut instantanément s'adapter à n'importe quelle nouvelle position du goal
+- La table Q encode "comment naviguer de A vers B" pour tous les couples (A,B)
+
+**3. Trade-off Mémoire vs Performance**
+- Features basiques : 25 états (grille 5×5)
+- Features enrichies : ~500 états explorés (sur 25×23 = 575 possibles)
+- Mais la performance est 10× meilleure !
+
+**4. Hyperparamètres ajustés**
+```python
+epsilon = 0.15  # Plus d'exploration pour découvrir
+alpha = 0.3     # Apprentissage plus rapide
+gamma = 0.95    # Moins d'importance au futur lointain
+```
+
+#### Exécution
+
+```powershell
+python catch_game_improved.py
+```
+
+**Visualisations générées :**
+- Courbes d'apprentissage (récompenses et catches par épisode)
+- Démonstration de l'agent entraîné
+- Statistiques finales
+
+### 3. Feature Engineering - Synthèse
+
+**Problème général :**
 - Feature = Position de l'agent uniquement
-- L'agent ne "voit" pas le goal
+- L'agent ne "voit" pas le goal dans l'état
 
-**Amélioration possible :**
-- Feature = (Position agent, Position goal)
-- L'agent apprendrait : "Comment aller de A vers B" (généralisation)
-- S'adapterait **instantanément** aux changements de goal
+**Solutions explorées :**
 
-**Non implémenté dans ce projet** (reste simple pour la pédagogie).
+| Approche | État | Utilisation | Performance |
+|----------|------|-------------|-------------|
+| **Basique** | position | Goal fixe | ✅ Optimal (8 steps) |
+| **Basique** | position | Goal dynamique entre épisodes | ⚠️ Réapprend à chaque changement |
+| **Basique** | position | Goal mobile dans épisode | ❌ Échec (~2 catches) |
+| **Enrichie** | (agent_pos, goal_pos) | Goal mobile dans épisode | ✅ Excellent (~21 catches) |
 
-### 3. Hyperparamètres
+**Conclusion :** L'état enrichi permet la **généralisation** - l'agent apprend "comment aller de A vers B" au lieu de mémoriser des positions fixes.
+
+### 4. Hyperparamètres
 
 **Paramètres configurables :**
 
@@ -630,26 +746,4 @@ Ce projet illustre les fondamentaux de l'apprentissage par renforcement :
 
 ---
 
-## 📚 Références
 
-- **Sutton & Barto** - Reinforcement Learning: An Introduction (2018)
-- **Gymnasium Documentation** - https://gymnasium.farama.org/
-- **OpenAI Spinning Up** - https://spinningup.openai.com/
-
----
-
-## 👨‍💻 Auteur
-
-Projet réalisé dans le cadre d'un cours d'apprentissage par renforcement.
-
-**Date :** Décembre 2025
-
----
-
-## 📝 Licence
-
-Ce projet est à usage éducatif.
-
----
-
-**Bon apprentissage ! 🚀**
